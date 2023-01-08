@@ -1,0 +1,80 @@
+version: '3.6'
+
+networks:
+  private:
+    external: true
+    name: private
+
+services:
+  pyshark:
+    build:
+      context: pyanalyzer
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    network_mode: host
+    depends_on:
+      - kafka
+    environment:
+      IFACE_NAME: "any"
+      KAFKA_HOST: localhost
+      KAFKA_PORT: 9092
+      TOPIC: mor1
+
+  data_transfer:
+    build:
+      context: datatransfer
+    environment:
+      KAFKA_HOST: localhost
+      KAFKA_PORT: 9092
+      TOPIC: mor1
+      DB_URL: localhost:7474
+      DB_USER: neo4j
+      DB_PASSWORD: mor@1234
+
+  zookeeper:
+    image: zookeeper:latest
+
+  kafka:
+    image: bitnami/kafka:latest
+    hostname: kafka
+    environment:
+      - KAFKA_ADVERTISED_HOST_NAME=kafka
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_ADVERTISED_PORT=9092
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/kafka
+
+  kafka-ui:
+    environment:
+      JVM_OPTS: -Xms32M -Xmx64M
+      KAFKA_BROKERCONNECT: kafka:9092
+    image: obsidiandynamics/kafdrop:latest
+    ports:
+      - "9000:9000"
+
+  neo4j:
+    image: neo4j:5.3
+    restart: unless-stopped
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - ./conf:/conf
+      - ./data:/data
+      - ./import:/import
+      - ./logs:/logs
+      - ./plugins:/plugins
+    environment:
+      # Raise memory limits
+      - NEO4J_dbms_memory_pagecache_size=1G
+      - NEO4J_dbms.memory.heap.initial_size=1G
+      - NEO4J_dbms_memory_heap_max__size=1G
+
+volumes:
+  kafka_data:
